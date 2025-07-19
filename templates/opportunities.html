@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stock Opportunities</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+<meta http-equiv="refresh" content="60">
+<h1 class="mb-4">Stock Opportunities <small class="text-muted" style="font-size:18px;">(auto-refreshes every 60s)</small></h1>
+<h2 class="text-success">Buy Opportunities</h2>
+{% if buy_stocks %}
+<table class="table table-bordered table-hover">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Current Price</th>
+            <th>Change (%)</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Sentiment Score</th>
+            <th>News Count</th>
+            <th>Recommendation</th>
+            <th>Timestamp</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for stock in buy_stocks %}
+        <tr>
+            <td>{{ stock.symbol }}</td>
+            <td>{{ stock.current_price }}</td>
+            <td>{{ stock.change_pct }}</td>
+            <td>{{ stock.prediction }}</td>
+            <td>{{ stock.confidence }}</td>
+            <td>{{ stock.sentiment_score }}</td>
+            <td>{{ stock.news_count }}</td>
+            <td><strong>{{ stock.recommendation }}</strong></td>
+            <td>{{ stock.timestamp }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No buy opportunities found.</div>
+{% endif %}
+
+<h2 class="text-danger mt-5">Sell Opportunities</h2>
+{% if sell_stocks %}
+<table class="table table-bordered table-hover">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Current Price</th>
+            <th>Change (%)</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Sentiment Score</th>
+            <th>News Count</th>
+            <th>Recommendation</th>
+            <th>Timestamp</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for stock in sell_stocks %}
+        <tr>
+            <td>{{ stock.symbol }}</td>
+            <td>{{ stock.current_price }}</td>
+            <td>{{ stock.change_pct }}</td>
+            <td>{{ stock.prediction }}</td>
+            <td>{{ stock.confidence }}</td>
+            <td>{{ stock.sentiment_score }}</td>
+            <td>{{ stock.news_count }}</td>
+            <td><strong>{{ stock.recommendation }}</strong></td>
+            <td>{{ stock.timestamp }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No sell opportunities found.</div>
+{% endif %}
+
+<h2 class="text-secondary mt-5">Hold Opportunities</h2>
+{% if hold_stocks %}
+<table class="table table-bordered table-hover">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Current Price</th>
+            <th>Change (%)</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Sentiment Score</th>
+            <th>News Count</th>
+            <th>Recommendation</th>
+            <th>Timestamp</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for stock in hold_stocks %}
+        <tr>
+            <td>{{ stock.symbol }}</td>
+            <td>{{ stock.current_price }}</td>
+            <td>{{ stock.change_pct }}</td>
+            <td>{{ stock.prediction }}</td>
+            <td>{{ stock.confidence }}</td>
+            <td>{{ stock.sentiment_score }}</td>
+            <td>{{ stock.news_count }}</td>
+            <td><strong>{{ stock.recommendation }}</strong></td>
+            <td>{{ stock.timestamp }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No hold opportunities found.</div>
+{% endif %}
+</div>
+</body>
+</html>
