@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Virtual environments
+venv/
+ENV/
+.env/
+.env
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data
+*.sqlite3
+*.db
+*.csv
+*.tsv
+*.xls
+*.xlsx
+
+# Secrets
+*.key
+*.pem
+*.crt
+
+# Others
+*.bak
+*.swp
+*.swo
+
+# Ignore requirements.txt if you want to auto-generate it
+# requirements.txt

@@ -1,0 +1,64 @@
+/* Main styles for Stock Notify */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.sentiment-positive {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.sentiment-negative {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.sentiment-neutral {
+    color: #6c757d;
+    font-weight: normal;
+}
+
+.profit {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.loss {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.high-accuracy {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.medium-accuracy {
+    color: #fd7e14;
+    font-weight: bold;
+}
+
+.low-accuracy {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.table th {
+    background-color: #f8f9fa;
+}
+
+.btn-outline-primary.active {
+    background-color: #007bff;
+    color: white;
+}

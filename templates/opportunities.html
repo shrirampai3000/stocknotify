@@ -4,12 +4,228 @@
     <meta charset="UTF-8">
     <title>Stock Opportunities</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .sentiment-positive {
+            color: green;
+            font-weight: bold;
+        }
+        .sentiment-negative {
+            color: red;
+            font-weight: bold;
+        }
+        .sentiment-neutral {
+            color: gray;
+            font-weight: normal;
+        }
+    </style>
 </head>
 <body>
 <div class="container mt-5">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Stock Notify</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Opportunities</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/portfolio">Portfolio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/performance">Performance</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings">Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Market Selector -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <div class="btn-group" role="group">
+                <a href="/?market=all" class="btn btn-outline-primary {% if selected_market == 'all' %}active{% endif %}">All Markets</a>
+                <a href="/?market=india" class="btn btn-outline-primary {% if selected_market == 'india' %}active{% endif %}">India</a>
+                <a href="/?market=us" class="btn btn-outline-primary {% if selected_market == 'us' %}active{% endif %}">US</a>
+            </div>
+        </div>
+    </div>
+<!-- Prediction Accuracy -->
+<div class="mb-4">
+  <div class="alert alert-info">
+    <strong>Prediction Accuracy:</strong>
+    {% if prediction_accuracy is not none %}
+      {{ prediction_accuracy }}%
+    {% else %}
+      Not enough data to validate predictions.
+    {% endif %}
+  </div>
+</div>
+{% if error429 %}
+<div class="alert alert-warning">
+  <strong>Notice:</strong> News API rate limit reached. Showing cached news and sentiment data. Please try again later for fresh news.
+</div>
+{% endif %}
+<!-- Last Updated and Manual Refresh -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <span class="text-muted">Last updated: {% if last_updated %}{{ last_updated }}{% else %}N/A{% endif %}</span>
+  </div>
+  <div>
+    <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">Refresh Now</button>
+  </div>
+</div>
 <meta http-equiv="refresh" content="60">
-<h1 class="mb-4">Stock Opportunities <small class="text-muted" style="font-size:18px;">(auto-refreshes every 60s)</small></h1>
-<h2 class="text-success">Buy Opportunities</h2>
+<!-- Holistic Market Summary -->
+<h1 class="mb-4">Stock Market Overview <small class="text-muted" style="font-size:18px;">(auto-refreshes every 60s)</small></h1>
+
+<!-- Portfolio Summary Card (if portfolio exists) -->
+{% if portfolio_value is defined and portfolio_value > 0 %}
+<div class="card mb-4 bg-light">
+    <div class="card-body">
+        <h5 class="card-title">Your Portfolio Summary</h5>
+        <div class="row">
+            <div class="col-md-3">
+                <p><strong>Total Value:</strong> ${{ portfolio_value }}</p>
+            </div>
+            <div class="col-md-3">
+                <p><strong>Profit/Loss:</strong> <span class="{% if total_profit_loss >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit_loss_pct }}%</span></p>
+            </div>
+            <div class="col-md-6 text-end">
+                <a href="/portfolio" class="btn btn-sm btn-primary">View Portfolio</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="card-title">Total Stocks</h5>
+        <p class="card-text display-6">{{ total_stocks }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="card-title">Avg Sentiment</h5>
+        <p class="card-text display-6 {% if avg_sentiment > 0.1 %}sentiment-positive{% elif avg_sentiment < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ avg_sentiment }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="card-title">Avg Change (%)</h5>
+        <p class="card-text display-6">{{ avg_change }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="card-title">Buy/Sell/Hold</h5>
+        <p class="card-text display-6">
+          <span class="text-success">{{ buy_count }}</span> /
+          <span class="text-danger">{{ sell_count }}</span> /
+          <span class="text-secondary">{{ hold_count }}</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Top Gainers -->
+<h2 class="mt-4 text-primary">Top Gainers</h2>
+{% if top_gainers %}
+<table class="table table-bordered table-hover">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Current Price</th>
+      <th>Change (%)</th>
+      <th>Sentiment Score</th>
+      <th>Recommendation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stock in top_gainers %}
+    <tr>
+      <td>{{ stock.symbol }}</td>
+      <td>{{ stock.current_price }}</td>
+      <td>{{ stock.change_pct }}</td>
+      <td class="{% if stock.sentiment_score > 0.1 %}sentiment-positive{% elif stock.sentiment_score < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ stock.sentiment_score }}</td>
+      <td><strong>{{ stock.recommendation }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No gainers found.</div>
+{% endif %}
+
+<!-- Top Losers -->
+<h2 class="mt-4 text-danger">Top Losers</h2>
+{% if top_losers %}
+<table class="table table-bordered table-hover">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Current Price</th>
+      <th>Change (%)</th>
+      <th>Sentiment Score</th>
+      <th>Recommendation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for stock in top_losers %}
+    <tr>
+      <td>{{ stock.symbol }}</td>
+      <td>{{ stock.current_price }}</td>
+      <td>{{ stock.change_pct }}</td>
+      <td class="{% if stock.sentiment_score > 0.1 %}sentiment-positive{% elif stock.sentiment_score < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ stock.sentiment_score }}</td>
+      <td><strong>{{ stock.recommendation }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No losers found.</div>
+{% endif %}
+
+<!-- Opportunities Tables -->
+<h2 class="text-success mt-5">Buy Opportunities</h2>
+<!-- Prediction Validation Table -->
+<h2 class="mt-5 text-warning">Prediction Validation</h2>
+<table class="table table-bordered table-hover">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Predicted</th>
+      <th>Actual</th>
+      <th>Correct?</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for result in prediction_results %}
+    <tr>
+      <td>{{ result.symbol }}</td>
+      <td>{{ result.predicted }}</td>
+      <td>{{ result.actual }}</td>
+      <td>{% if result.is_correct is none %}<span class="text-muted">N/A</span>{% elif result.is_correct %}<span class="text-success">✔</span>{% else %}<span class="text-danger">✘</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% if buy_stocks %}
 <table class="table table-bordered table-hover">
     <thead>
@@ -33,10 +249,26 @@
             <td>{{ stock.change_pct }}</td>
             <td>{{ stock.prediction }}</td>
             <td>{{ stock.confidence }}</td>
-            <td>{{ stock.sentiment_score }}</td>
+            <td class="{% if stock.sentiment_score > 0.1 %}sentiment-positive{% elif stock.sentiment_score < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ stock.sentiment_score }}</td>
             <td>{{ stock.news_count }}</td>
             <td><strong>{{ stock.recommendation }}</strong></td>
             <td>{{ stock.timestamp }}</td>
+        </tr>
+        {% if stock.recent_news %}
+        <tr>
+            <td colspan="10">
+                <strong>Recent News:</strong>
+                <ul>
+                {% for article in stock.recent_news %}
+                    <li>
+                        <span class="fw-bold">{{ article.title }}</span>
+                        {% if article.desc %}<span class="text-muted"> - {{ article.desc }}</span>{% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </td>
+        </tr>
+        {% endif %}
         </tr>
     {% endfor %}
     </tbody>
@@ -69,7 +301,7 @@
             <td>{{ stock.change_pct }}</td>
             <td>{{ stock.prediction }}</td>
             <td>{{ stock.confidence }}</td>
-            <td>{{ stock.sentiment_score }}</td>
+            <td class="{% if stock.sentiment_score > 0.1 %}sentiment-positive{% elif stock.sentiment_score < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ stock.sentiment_score }}</td>
             <td>{{ stock.news_count }}</td>
             <td><strong>{{ stock.recommendation }}</strong></td>
             <td>{{ stock.timestamp }}</td>
@@ -105,7 +337,7 @@
             <td>{{ stock.change_pct }}</td>
             <td>{{ stock.prediction }}</td>
             <td>{{ stock.confidence }}</td>
-            <td>{{ stock.sentiment_score }}</td>
+            <td class="{% if stock.sentiment_score > 0.1 %}sentiment-positive{% elif stock.sentiment_score < -0.1 %}sentiment-negative{% else %}sentiment-neutral{% endif %}">{{ stock.sentiment_score }}</td>
             <td>{{ stock.news_count }}</td>
             <td><strong>{{ stock.recommendation }}</strong></td>
             <td>{{ stock.timestamp }}</td>

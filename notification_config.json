@@ -1,0 +1,21 @@
+{
+    "email": {
+        "enabled": false,
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "username": "",
+        "password": "",
+        "recipients": []
+    },
+    "thresholds": {
+        "price_change": 5.0,
+        "sentiment_change": 0.3,
+        "volume_spike": 200
+    },
+    "notification_types": {
+        "price_alerts": true,
+        "sentiment_alerts": true,
+        "portfolio_alerts": true,
+        "daily_summary": true
+    }
+}

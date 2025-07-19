@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Portfolio Management</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .profit {
+            color: green;
+            font-weight: bold;
+        }
+        .loss {
+            color: red;
+            font-weight: bold;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Stock Notify</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Opportunities</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/portfolio">Portfolio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/performance">Performance</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings">Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <h1 class="mb-4">Portfolio Management</h1>
+
+    <!-- Portfolio Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Total Value</h5>
+                    <p class="card-text display-6">${{ total_value }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Total Cost</h5>
+                    <p class="card-text display-6">${{ total_cost }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Profit/Loss</h5>
+                    <p class="card-text display-6 {% if total_profit_loss >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ total_profit_loss }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Return (%)</h5>
+                    <p class="card-text display-6 {% if total_profit_loss_pct >= 0 %}profit{% else %}loss{% endif %}">
+                        {{ total_profit_loss_pct }}%
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portfolio Positions -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Portfolio Positions</h5>
+                </div>
+                <div class="card-body">
+                    {% if portfolio %}
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Shares</th>
+                                <th>Buy Price</th>
+                                <th>Current Price</th>
+                                <th>Current Value</th>
+                                <th>Profit/Loss</th>
+                                <th>Return (%)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for position in portfolio %}
+                            <tr>
+                                <td>{{ position.symbol }}</td>
+                                <td>{{ position.shares }}</td>
+                                <td>${{ position.buy_price }}</td>
+                                <td>${{ position.current_price }}</td>
+                                <td>${{ position.current_value }}</td>
+                                <td class="{% if position.profit_loss >= 0 %}profit{% else %}loss{% endif %}">
+                                    ${{ position.profit_loss }}
+                                </td>
+                                <td class="{% if position.profit_loss_pct >= 0 %}profit{% else %}loss{% endif %}">
+                                    {{ position.profit_loss_pct }}%
+                                </td>
+                                <td>
+                                    <form action="/portfolio/remove" method="post" style="display: inline;">
+                                        <input type="hidden" name="symbol" value="{{ position.symbol }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="alert alert-info">No positions in portfolio.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Position Form -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Add Position</h5>
+                </div>
+                <div class="card-body">
+                    <form action="/portfolio/add" method="post">
+                        <div class="mb-3">
+                            <label for="symbol" class="form-label">Symbol</label>
+                            <input type="text" class="form-control" id="symbol" name="symbol" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="shares" class="form-label">Shares</label>
+                            <input type="number" step="0.01" class="form-control" id="shares" name="shares" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="buy_price" class="form-label">Buy Price</label>
+                            <input type="number" step="0.01" class="form-control" id="buy_price" name="buy_price" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="buy_date" class="form-label">Buy Date</label>
+                            <input type="date" class="form-control" id="buy_date" name="buy_date">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Position</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portfolio Performance Chart -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Portfolio Performance (30 Days)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portfolio Allocation -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Allocation by Symbol</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="symbolAllocationChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Allocation by Sector</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sectorAllocationChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Performance Chart
+    const performanceData = {
+        labels: [{% for day in performance_history %}'{{ day.date }}',{% endfor %}],
+        datasets: [{
+            label: 'Portfolio Value',
+            data: [{% for day in performance_history %}{{ day.value }},{% endfor %}],
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            fill: true
+        }]
+    };
+
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(performanceCtx, {
+        type: 'line',
+        data: performanceData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+
+    // Symbol Allocation Chart
+    const symbolAllocationData = {
+        labels: [{% for symbol, percentage in allocation.by_symbol.items() %}'{{ symbol }}',{% endfor %}],
+        datasets: [{
+            data: [{% for symbol, percentage in allocation.by_symbol.items() %}{{ percentage }},{% endfor %}],
+            backgroundColor: [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)',
+                'rgba(40, 159, 64, 0.7)',
+                'rgba(210, 199, 199, 0.7)'
+            ]
+        }]
+    };
+
+    const symbolAllocationCtx = document.getElementById('symbolAllocationChart').getContext('2d');
+    new Chart(symbolAllocationCtx, {
+        type: 'pie',
+        data: symbolAllocationData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+
+    // Sector Allocation Chart
+    const sectorAllocationData = {
+        labels: [{% for sector, percentage in allocation.by_sector.items() %}'{{ sector }}',{% endfor %}],
+        datasets: [{
+            data: [{% for sector, percentage in allocation.by_sector.items() %}{{ percentage }},{% endfor %}],
+            backgroundColor: [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)'
+            ]
+        }]
+    };
+
+    const sectorAllocationCtx = document.getElementById('sectorAllocationChart').getContext('2d');
+    new Chart(sectorAllocationCtx, {
+        type: 'pie',
+        data: sectorAllocationData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

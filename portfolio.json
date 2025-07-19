@@ -1,0 +1,17 @@
+{
+    "RELIANCE.NS": {
+        "shares": 10,
+        "buy_price": 2500,
+        "buy_date": "2023-01-15"
+    },
+    "AAPL": {
+        "shares": 5,
+        "buy_price": 180,
+        "buy_date": "2023-02-10"
+    },
+    "MSFT": {
+        "shares": 3,
+        "buy_price": 350,
+        "buy_date": "2023-03-05"
+    }
+}

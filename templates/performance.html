@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Prediction Performance</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .high-accuracy {
+            color: green;
+            font-weight: bold;
+        }
+        .medium-accuracy {
+            color: orange;
+            font-weight: bold;
+        }
+        .low-accuracy {
+            color: red;
+            font-weight: bold;
+        }
+        .card {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container mt-5">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Stock Notify</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Opportunities</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/portfolio">Portfolio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/performance">Performance</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings">Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <h1 class="mb-4">Prediction Performance</h1>
+
+    <!-- Overall Accuracy -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Overall Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.overall_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.overall_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.overall_accuracy is not none %}
+                            {{ accuracy_metrics.overall_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Buy Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.rise_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.rise_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.rise_accuracy is not none %}
+                            {{ accuracy_metrics.rise_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Sell Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.fall_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.fall_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.fall_accuracy is not none %}
+                            {{ accuracy_metrics.fall_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Hold Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.stable_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.stable_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.stable_accuracy is not none %}
+                            {{ accuracy_metrics.stable_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accuracy by Confidence -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">High Confidence Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.high_conf_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.high_conf_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.high_conf_accuracy is not none %}
+                            {{ accuracy_metrics.high_conf_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Medium Confidence Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.med_conf_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.med_conf_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.med_conf_accuracy is not none %}
+                            {{ accuracy_metrics.med_conf_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Low Confidence Accuracy</h5>
+                    <p class="card-text display-6 {% if accuracy_metrics.low_conf_accuracy >= 70 %}high-accuracy{% elif accuracy_metrics.low_conf_accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                        {% if accuracy_metrics.low_conf_accuracy is not none %}
+                            {{ accuracy_metrics.low_conf_accuracy }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accuracy Chart -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Accuracy Over Time</h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if accuracy_chart %}
+                        <img src="data:image/png;base64,{{ accuracy_chart }}" alt="Accuracy Chart" class="img-fluid">
+                    {% else %}
+                        <div class="alert alert-info">No accuracy chart available.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accuracy by Symbol -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Accuracy by Symbol</h5>
+                </div>
+                <div class="card-body">
+                    {% if accuracy_by_symbol %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Total Predictions</th>
+                                    <th>Correct Predictions</th>
+                                    <th>Accuracy</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for symbol, data in accuracy_by_symbol.items() %}
+                                <tr>
+                                    <td>{{ symbol }}</td>
+                                    <td>{{ data.total }}</td>
+                                    <td>{{ data.correct }}</td>
+                                    <td class="{% if data.accuracy >= 70 %}high-accuracy{% elif data.accuracy >= 50 %}medium-accuracy{% else %}low-accuracy{% endif %}">
+                                        {{ data.accuracy }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <div class="alert alert-info">No accuracy data by symbol available.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prediction Distribution -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Prediction Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="predictionDistributionChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Prediction Distribution Chart
+    const predictionDistributionData = {
+        labels: ['Buy', 'Sell', 'Hold'],
+        datasets: [{
+            label: 'Prediction Count',
+            data: [
+                {{ accuracy_metrics.rise_count or 0 }},
+                {{ accuracy_metrics.fall_count or 0 }},
+                {{ accuracy_metrics.stable_count or 0 }}
+            ],
+            backgroundColor: [
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(255, 206, 86, 0.7)'
+            ]
+        }]
+    };
+
+    const predictionDistributionCtx = document.getElementById('predictionDistributionChart').getContext('2d');
+    new Chart(predictionDistributionCtx, {
+        type: 'bar',
+        data: predictionDistributionData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>
