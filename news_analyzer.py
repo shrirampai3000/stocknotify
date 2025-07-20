@@ -45,28 +45,30 @@ class NewsAnalyzer:
 
     def get_news_articles(self, symbol):
         """
-        Fetch recent news articles for the stock symbol and analyze sentiment for each headline.
+        Fetch recent news articles for the stock symbol.
         """
         try:
+            today = datetime.datetime.now()
+            from_date = (today - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+            to_date = today.strftime('%Y-%m-%d')
             query = symbol.split('.')[0]
-            self.googlenews.clear()
-            self.googlenews.search(query)
-            articles = self.googlenews.results(sort=True)
+
+            all_articles = self.newsapi.get_everything(q=query,
+                                                       from_param=from_date,
+                                                       to=to_date,
+                                                       language='en',
+                                                       sort_by='relevancy',
+                                                       page_size=50)
+
+            articles = all_articles.get('articles', [])
             simplified_articles = []
             for article in articles:
-                headline = article.get('title', '')
-                desc = article.get('desc', '')
-                content = headline + ' ' + desc
-                vader_score = self.analyzer.polarity_scores(content)['compound'] if content else 0
-                tb_score = TextBlob(content).sentiment.polarity if content else 0
-                avg_score = (vader_score + tb_score) / 2
                 simplified_articles.append({
-                    'title': headline,
-                    'desc': desc,
-                    'url': article.get('link'),
-                    'publishedAt': article.get('date'),
-                    'source': article.get('media'),
-                    'sentiment': avg_score
+                    'title': article.get('title'),
+                    'description': article.get('description'),
+                    'url': article.get('url'),
+                    'publishedAt': article.get('publishedAt'),
+                    'source': article.get('source', {}).get('name')
                 })
             return simplified_articles
         except Exception as e:
