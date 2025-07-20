@@ -1,517 +1,260 @@
-# Main Flask application for stock prediction
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-import yfinance as yf
+"""
+Stock Notification Application - Main Flask Application
+"""
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-import requests
-import json
-from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import os
 from dotenv import load_dotenv
-from stock_predictor import StockPredictor
-from news_analyzer import NewsAnalyzer
-# Import with error handling for social sentiment
-try:
-    from social_sentiment import SocialSentimentAnalyzer
-    social_sentiment_available = True
-except Exception as e:
-    print(f"Warning: Social sentiment analysis not available: {e}")
-    social_sentiment_available = False
-from portfolio_tracker import PortfolioTracker
-from notification_system import NotificationSystem
-from performance_tracker import PerformanceTracker
-from scheduler import start_scheduler
+import os
+import logging
+
+# Import application modules
+from data_ingestion.market_data import MarketDataFetcher
+from data_ingestion.news_sentiment import NewsSentimentAnalyzer
+from analysis.market_analysis import MarketAnalyzer
+from analysis.recommendation import RecommendationEngine
+from config import config
 
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'stocknotify-secret-key')
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Initialize components
-predictor = StockPredictor()
-news_analyzer = NewsAnalyzer()
+def create_app(config_name='default'):
+    """Application factory pattern."""
+    app = Flask(__name__)
+    
+    # Load configuration
+    app.config.from_object(config[config_name])
+    
+    # Initialize components
+    market_data = MarketDataFetcher()
+    news_analyzer = NewsSentimentAnalyzer()
+    market_analyzer = MarketAnalyzer()
+    recommendation_engine = RecommendationEngine()
+    
+    # Cache for storing analysis results
+    analysis_cache = {}
+    
+    def analyze_stock(symbol: str) -> dict:
+        """
+        Comprehensive stock analysis including technical, sentiment, and ML predictions
+        """
+        now = datetime.now()
+        
+        # Check cache first
+        if symbol in analysis_cache:
+            last_update, data = analysis_cache[symbol]
+            if (now - last_update).seconds < app.config['CACHE_TTL']:
+                return data
 
-# Initialize social sentiment analyzer with error handling
-if social_sentiment_available:
-    try:
-        # Use mock data to avoid Twitter API issues
-        social_sentiment_analyzer = SocialSentimentAnalyzer(use_mock_data=True)
-        print("Using mock data for social sentiment analysis")
-    except Exception as e:
-        print(f"Warning: Could not initialize social sentiment analyzer: {e}")
-        social_sentiment_available = False
-else:
-    social_sentiment_analyzer = None
-
-# Initialize other components
-portfolio_tracker = PortfolioTracker()
-notification_system = NotificationSystem()
-performance_tracker = PerformanceTracker()
-
-# Simple in-memory cache for news sentiment and articles
-news_cache = {}
-NEWS_CACHE_TTL = 1800  # 30 minutes
-
-# Start the scheduler (commented out for initial testing)
-try:
-    # start_scheduler()  # Uncomment this line after ensuring the app runs correctly
-    print("Scheduler disabled for initial testing")
-except Exception as e:
-    print(f"Error with scheduler: {e}")
-
-def get_indian_tickers():
-    # List of popular Indian stocks (NSE)
-    return [
-        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-        'SBIN.NS', 'BHARTIARTL.NS', 'HINDUNILVR.NS', 'KOTAKBANK.NS', 'LT.NS',
-        'AXISBANK.NS', 'ITC.NS', 'MARUTI.NS', 'SUNPHARMA.NS', 'ULTRACEMCO.NS'
-    ]
-
-def get_us_tickers():
-    # List of popular US stocks
-    return [
-        'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META',
-        'TSLA', 'NVDA', 'JPM', 'V', 'WMT'
-    ]
-
-# Get stocks based on market selection
-def get_monitored_stocks(market='all'):
-    if market == 'india':
-        return get_indian_tickers()
-    elif market == 'us':
-        return get_us_tickers()
-    else:  # 'all'
-        return get_indian_tickers() + get_us_tickers()
-
-MONITORED_STOCKS = get_monitored_stocks()
-
-# Portfolio tracking
-portfolio_data = {
-    'RELIANCE.NS': {'shares': 10, 'buy_price': 2500},
-    'AAPL': {'shares': 5, 'buy_price': 180},
-    'MSFT': {'shares': 3, 'buy_price': 350}
-}
-@app.route('/opportunities')
-@app.route('/')
-def opportunities():
-    market = request.args.get('market', 'all')
-    stocks_to_monitor = get_monitored_stocks(market)
-    """Classify stocks into Buy, Sell, Hold based on price change and news sentiment"""
-    buy_stocks = []
-    sell_stocks = []
-    hold_stocks = []
-    all_stocks = []
-    prediction_results = []
-    correct_predictions = 0
-    total_predictions = 0
-    import time
-    now = time.time()
-    for symbol in stocks_to_monitor:
         try:
-            stock_data = predictor.get_stock_data(symbol)
-            # Caching for news sentiment and articles
-            cache_entry = news_cache.get(symbol)
-            if cache_entry and now - cache_entry['timestamp'] < NEWS_CACHE_TTL:
-                news_sentiment = cache_entry['news_sentiment']
-                recent_news = cache_entry['recent_news']
-            else:
-                news_sentiment = news_analyzer.get_news_sentiment(symbol)
-                recent_news = news_analyzer.get_news_articles(symbol) if hasattr(news_analyzer, 'get_news_articles') else []
-                news_cache[symbol] = {
-                    'news_sentiment': news_sentiment,
-                    'recent_news': recent_news,
-                    'timestamp': now
+            # Fetch market data
+            end_date = now
+            start_date = end_date - timedelta(days=app.config['HISTORICAL_DAYS'])
+            stock_data = market_data.get_stock_data(symbol, start_date, end_date)
+            
+            if stock_data is None or stock_data.empty or 'Close' not in stock_data.columns:
+                logger.error(f"No valid price data for {symbol}")
+                return {'symbol': symbol, 'error': 'No valid price data'}
+
+            # Get news and sentiment
+            try:
+                news_items, sentiment_score = news_analyzer.get_news_sentiment(
+                    symbol, 
+                    symbol.replace(".NS", "")
+                )
+            except Exception as e:
+                logger.error(f"News sentiment error for {symbol}: {e}")
+                news_items, sentiment_score = [], 0.0
+
+            # Technical analysis
+            try:
+                technical_analysis = market_analyzer.analyze_stock(stock_data, symbol)
+            except Exception as e:
+                logger.error(f"Technical analysis error for {symbol}: {e}")
+                technical_analysis = {
+                    'technical_indicators': {}, 
+                    'predictions': {}, 
+                    'risk_metrics': {}, 
+                    'regime': {}
                 }
-            # Get social media sentiment if available
-            social_sentiment = {'overall_sentiment': 0, 'tweet_count': 0}
-            if social_sentiment_available and social_sentiment_analyzer:
-                try:
-                    # Extract company name from ticker for better social media search
-                    company_name = symbol.split('.')[0]
-                    social_sentiment = social_sentiment_analyzer.get_twitter_sentiment(company_name)
-                except Exception as e:
-                    print(f"Error getting social sentiment for {symbol}: {e}")
-                
-            # Combine news and social sentiment with weighted average
-            news_weight = 0.7
-            social_weight = 0.3
-            news_sentiment_value = news_sentiment['overall_sentiment']
-            social_sentiment_value = social_sentiment.get('average_sentiment', 0)
-            
-            # Calculate weighted sentiment - prioritize news sentiment if social is unavailable
-            if social_sentiment_available and news_sentiment['news_count'] > 0 and social_sentiment.get('tweet_count', 0) > 0:
-                combined_sentiment = (news_sentiment_value * news_weight) + (social_sentiment_value * social_weight)
-            elif news_sentiment['news_count'] > 0:
-                combined_sentiment = news_sentiment_value
-            elif social_sentiment_available and social_sentiment.get('tweet_count', 0) > 0:
-                combined_sentiment = social_sentiment_value
-            else:
-                combined_sentiment = 0
-                
-            combined_sentiment_data = {
-                'overall_sentiment': combined_sentiment,
-                'news_count': news_sentiment['news_count'],
-                'tweet_count': social_sentiment.get('tweet_count', 0)
-            }
-            prediction = predictor.predict_stock_movement(symbol, combined_sentiment_data)
 
-            price_history = stock_data.get('history', [])
-            change_pct = 0
-            if len(price_history) >= 2:
-                prev = price_history[-2]['close']
-                curr = price_history[-1]['close']
-                if prev:
-                    change_pct = ((curr - prev) / prev) * 100
+            # Generate recommendations
+            try:
+                recommendation = recommendation_engine.generate_recommendation(
+                    stock_data,
+                    technical_analysis.get('technical_indicators', {}),
+                    sentiment_score,
+                    technical_analysis.get('regime', {})
+                )
+            except Exception as e:
+                logger.error(f"Recommendation error for {symbol}: {e}")
+                recommendation = {
+                    'recommendation': 'HOLD', 
+                    'confidence': 0, 
+                    'reasoning': ['Error in recommendation']
+                }
 
-            # Validation: compare previous prediction with actual movement
-            actual_movement = None
-            if len(price_history) >= 2:
-                if curr > prev:
-                    actual_movement = 'buy'
-                elif curr < prev:
-                    actual_movement = 'sell'
-                else:
-                    actual_movement = 'hold'
-            predicted_movement = prediction.get('recommendation', '').lower()
-            is_correct = actual_movement == predicted_movement if actual_movement else None
-            if is_correct is not None:
-                total_predictions += 1
-                if is_correct:
-                    correct_predictions += 1
+            # Prepare response
+            try:
+                current_price = stock_data['Close'].iloc[-1]
+                prev_price = stock_data['Close'].iloc[-2] if len(stock_data['Close']) > 1 else current_price
+                change_pct = ((current_price - prev_price) / prev_price * 100) if prev_price else 0.0
+                prediction = technical_analysis.get('predictions', {}).get('prophet_pred', [current_price])[0]
+            except Exception as e:
+                logger.error(f"Data formatting error for {symbol}: {e}")
+                current_price, change_pct, prediction = 0.0, 0.0, 0.0
 
-            stock_info = {
+            result = {
                 'symbol': symbol,
-                'current_price': stock_data['current_price'],
-                'change_pct': round(change_pct, 2),
-                'prediction': prediction['prediction'],
-                'confidence': prediction['confidence'],
-                'sentiment_score': combined_sentiment,
-                'news_count': combined_sentiment_data['news_count'],
-                'recommendation': prediction['recommendation'],
-                'timestamp': datetime.now().isoformat(),
-                'recent_news': recent_news,
-                'actual_movement': actual_movement,
-                'is_correct': is_correct
-            }
-
-            # Improved classification logic for Indian stocks
-            sentiment = combined_sentiment
-            if predicted_movement == 'buy' or (change_pct <= -2 and sentiment > 0):
-                buy_stocks.append(stock_info)
-            elif predicted_movement == 'sell' or (change_pct >= 2 and sentiment < 0):
-                sell_stocks.append(stock_info)
-            else:
-                hold_stocks.append(stock_info)
-            all_stocks.append(stock_info)
-            prediction_results.append({'symbol': symbol, 'predicted': predicted_movement, 'actual': actual_movement, 'is_correct': is_correct})
-        except Exception as e:
-            continue
-
-    # Holistic market stats
-    total_stocks = len(all_stocks)
-    avg_sentiment = round(np.mean([s['sentiment_score'] for s in all_stocks]), 3) if all_stocks else 0
-    avg_change = round(np.mean([s['change_pct'] for s in all_stocks]), 2) if all_stocks else 0
-    buy_count = len(buy_stocks)
-    sell_count = len(sell_stocks)
-    hold_count = len(hold_stocks)
-    top_gainers = sorted(all_stocks, key=lambda x: x['change_pct'], reverse=True)[:5]
-    top_losers = sorted(all_stocks, key=lambda x: x['change_pct'])[:5]
-    prediction_accuracy = round((correct_predictions / total_predictions) * 100, 2) if total_predictions > 0 else None
-
-    # Calculate portfolio performance
-    portfolio_value = 0
-    portfolio_cost = 0
-    portfolio_performance = []
-    
-    for symbol, details in portfolio_data.items():
-        stock_info = next((s for s in all_stocks if s['symbol'] == symbol), None)
-        if stock_info:
-            current_value = stock_info['current_price'] * details['shares']
-            cost_basis = details['buy_price'] * details['shares']
-            profit_loss = current_value - cost_basis
-            profit_loss_pct = (profit_loss / cost_basis) * 100 if cost_basis > 0 else 0
-            
-            portfolio_value += current_value
-            portfolio_cost += cost_basis
-            
-            portfolio_performance.append({
-                'symbol': symbol,
-                'shares': details['shares'],
-                'buy_price': details['buy_price'],
-                'current_price': stock_info['current_price'],
-                'current_value': current_value,
-                'profit_loss': profit_loss,
-                'profit_loss_pct': round(profit_loss_pct, 2),
-                'recommendation': stock_info['recommendation']
-            })
-    
-    total_profit_loss = portfolio_value - portfolio_cost
-    total_profit_loss_pct = (total_profit_loss / portfolio_cost) * 100 if portfolio_cost > 0 else 0
-    
-    # Get last updated time
-    last_updated = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    return render_template('opportunities.html',
-        buy_stocks=buy_stocks,
-        sell_stocks=sell_stocks,
-        hold_stocks=hold_stocks,
-        total_stocks=total_stocks,
-        avg_sentiment=avg_sentiment,
-        avg_change=avg_change,
-        buy_count=buy_count,
-        sell_count=sell_count,
-        hold_count=hold_count,
-        top_gainers=top_gainers,
-        top_losers=top_losers,
-        prediction_results=prediction_results,
-        prediction_accuracy=prediction_accuracy,
-        portfolio_performance=portfolio_performance,
-        portfolio_value=round(portfolio_value, 2),
-        portfolio_cost=round(portfolio_cost, 2),
-        total_profit_loss=round(total_profit_loss, 2),
-        total_profit_loss_pct=round(total_profit_loss_pct, 2),
-        last_updated=last_updated,
-        selected_market=market
-    )
-
-# API endpoints for notifications and alerts
-@app.route('/api/alerts', methods=['GET'])
-def get_alerts():
-    """Get stock alerts based on significant price or sentiment changes"""
-    threshold = float(request.args.get('threshold', 5.0))  # Default 5% change
-    alerts = []
-    
-    for symbol in MONITORED_STOCKS:
-        try:
-            stock_data = predictor.get_stock_data(symbol)
-            if not stock_data:
-                continue
-                
-            price_change = stock_data.get('price_change', 0)
-            
-            # Check if stock is in portfolio
-            in_portfolio = symbol in portfolio_data
-            
-            # Generate alerts based on significant changes
-            if abs(price_change) >= threshold:
-                alert_type = 'price_change'
-                direction = 'up' if price_change > 0 else 'down'
-                priority = 'high' if in_portfolio else 'medium'
-                
-                alerts.append({
-                    'symbol': symbol,
-                    'type': alert_type,
-                    'message': f"{symbol} has moved {direction} by {abs(price_change)}%",
-                    'timestamp': datetime.now().isoformat(),
-                    'priority': priority
-                })
-                
-            # Get cached sentiment if available
-            cache_entry = news_cache.get(symbol)
-            if cache_entry:
-                sentiment = cache_entry['news_sentiment']['overall_sentiment']
-                
-                # Alert on extreme sentiment
-                if abs(sentiment) >= 0.5:
-                    sentiment_direction = 'positive' if sentiment > 0 else 'negative'
-                    priority = 'high' if in_portfolio else 'medium'
-                    
-                    alerts.append({
-                        'symbol': symbol,
-                        'type': 'sentiment_change',
-                        'message': f"{symbol} has {sentiment_direction} sentiment score of {sentiment}",
-                        'timestamp': datetime.now().isoformat(),
-                        'priority': priority
-                    })
-        except Exception as e:
-            continue
-            
-    return jsonify(alerts)
-
-@app.route('/api/portfolio', methods=['GET'])
-def get_portfolio():
-    """Get current portfolio performance"""
-    portfolio_data = []
-    total_value = 0
-    total_cost = 0
-    
-    for symbol, details in portfolio_data.items():
-        try:
-            stock_data = predictor.get_stock_data(symbol)
-            if not stock_data:
-                continue
-                
-            current_price = stock_data['current_price']
-            current_value = current_price * details['shares']
-            cost_basis = details['buy_price'] * details['shares']
-            profit_loss = current_value - cost_basis
-            profit_loss_pct = (profit_loss / cost_basis) * 100 if cost_basis > 0 else 0
-            
-            total_value += current_value
-            total_cost += cost_basis
-            
-            portfolio_data.append({
-                'symbol': symbol,
-                'shares': details['shares'],
-                'buy_price': details['buy_price'],
                 'current_price': current_price,
-                'current_value': round(current_value, 2),
-                'profit_loss': round(profit_loss, 2),
-                'profit_loss_pct': round(profit_loss_pct, 2)
-            })
+                'change_pct': change_pct,
+                'technical_analysis': technical_analysis,
+                'sentiment_score': sentiment_score,
+                'news_count': len(news_items),
+                'recent_news': news_items[:5],
+                'recommendation': recommendation.get('recommendation', 'HOLD'),
+                'confidence': recommendation.get('confidence', 0),
+                'prediction': prediction,
+                'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            analysis_cache[symbol] = (now, result)
+            return result
+            
         except Exception as e:
-            continue
-    
-    return jsonify({
-        'portfolio': portfolio_data,
-        'total_value': round(total_value, 2),
-        'total_cost': round(total_cost, 2),
-        'total_profit_loss': round(total_value - total_cost, 2),
-        'total_profit_loss_pct': round(((total_value - total_cost) / total_cost) * 100 if total_cost > 0 else 0, 2)
-    })
+            logger.error(f"Error analyzing {symbol}: {e}")
+            return {'symbol': symbol, 'error': str(e)}
 
-@app.route('/api/recommendations', methods=['GET'])
-def get_recommendations():
-    """Get stock recommendations based on technical analysis and sentiment"""
-    market = request.args.get('market', 'all')
-    stocks = get_monitored_stocks(market)
-    recommendations = []
-    
-    for symbol in stocks:
+    @app.route('/')
+    def opportunities():
+        """
+        Enhanced dashboard with comprehensive market analysis
+        """
         try:
-            stock_data = predictor.get_stock_data(symbol)
-            if not stock_data:
-                continue
-                
-            # Get cached sentiment
-            cache_entry = news_cache.get(symbol)
-            if not cache_entry:
-                continue
-                
-            sentiment_data = cache_entry['news_sentiment']
-            prediction = predictor.predict_stock_movement(symbol, sentiment_data)
+            # Analyze all stocks
+            results = []
+            for symbol in app.config['STOCK_LIST']:
+                result = analyze_stock(symbol)
+                if result and 'error' not in result:
+                    results.append(result)
+
+            # Always define all variables for template
+            buy_stocks = [r for r in results if r.get('recommendation') == 'BUY'] if results else []
+            sell_stocks = [r for r in results if r.get('recommendation') == 'SELL'] if results else []
+            hold_stocks = [r for r in results if r.get('recommendation') == 'HOLD'] if results else []
             
-            recommendations.append({
-                'symbol': symbol,
-                'current_price': stock_data['current_price'],
-                'recommendation': prediction['recommendation'],
-                'confidence': prediction['confidence'],
-                'sentiment': sentiment_data['overall_sentiment']
-            })
+            # Fallback: If no buy opportunities, show top gainer as buy
+            if not buy_stocks and results:
+                top_gainer = max(results, key=lambda x: x.get('change_pct', 0))
+                buy_stocks = [top_gainer]
+                
+            sorted_by_change = sorted(results, key=lambda x: x.get('change_pct', 0)) if results else []
+            top_losers = sorted_by_change[:3] if sorted_by_change else []
+            top_gainers = sorted_by_change[-3:] if sorted_by_change else []
+            
+            total_stocks = len(results)
+            avg_sentiment = round(np.mean([r.get('sentiment_score', 0) for r in results]), 3) if results else 0.0
+            avg_change = round(np.mean([r.get('change_pct', 0) for r in results]), 2) if results else 0.0
+            buy_count = len(buy_stocks)
+            sell_count = len(sell_stocks)
+            hold_count = len(hold_stocks)
+            
+            # Calculate prediction accuracy
+            prediction_results = []
+            for symbol in app.config['STOCK_LIST']:
+                if symbol in analysis_cache:
+                    last_analysis = analysis_cache[symbol][1]
+                    if 'prediction' in last_analysis:
+                        actual = last_analysis.get('current_price', 0)
+                        predicted = last_analysis.get('prediction', 0)
+                        prediction_results.append({
+                            'symbol': symbol,
+                            'predicted': predicted,
+                            'actual': actual,
+                            'is_correct': abs((predicted - actual) / actual) <= 0.02 if actual else False
+                        })
+            
+            if prediction_results:
+                correct_predictions = sum(1 for r in prediction_results if r['is_correct'])
+                prediction_accuracy = (correct_predictions / len(prediction_results)) * 100
+            else:
+                prediction_accuracy = None
+                
+            return render_template(
+                "opportunities.html",
+                buy_stocks=sorted(buy_stocks, key=lambda x: x.get('confidence', 0), reverse=True),
+                sell_stocks=sorted(sell_stocks, key=lambda x: x.get('confidence', 0), reverse=True),
+                hold_stocks=sorted(hold_stocks, key=lambda x: x.get('confidence', 0), reverse=True),
+                top_gainers=top_gainers,
+                top_losers=top_losers,
+                total_stocks=total_stocks,
+                avg_sentiment=avg_sentiment,
+                avg_change=avg_change,
+                buy_count=buy_count,
+                sell_count=sell_count,
+                hold_count=hold_count,
+                prediction_accuracy=round(prediction_accuracy, 1) if prediction_accuracy else None,
+                prediction_results=prediction_results,
+                last_updated=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                error=None
+            )
+            
         except Exception as e:
-            continue
-            
-    return jsonify(recommendations)
+            logger.error(f"Error in opportunities route: {e}")
+            # Always pass all variables, even on error
+            return render_template(
+                "opportunities.html",
+                buy_stocks=[],
+                sell_stocks=[],
+                hold_stocks=[],
+                top_gainers=[],
+                top_losers=[],
+                total_stocks=0,
+                avg_sentiment=0.0,
+                avg_change=0.0,
+                buy_count=0,
+                sell_count=0,
+                hold_count=0,
+                prediction_accuracy=None,
+                prediction_results=[],
+                last_updated=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                error=str(e)
+            )
 
-@app.route('/portfolio')
-def portfolio():
-    """Display portfolio performance"""
-    portfolio_data = portfolio_tracker.get_portfolio_performance()
-    performance_history = portfolio_tracker.track_performance_history(days=30)
-    allocation = portfolio_tracker.get_portfolio_allocation()
-    
-    return render_template('portfolio.html',
-        portfolio=portfolio_data['positions'],
-        total_value=portfolio_data['total_value'],
-        total_cost=portfolio_data['total_cost'],
-        total_profit_loss=portfolio_data['total_profit_loss'],
-        total_profit_loss_pct=portfolio_data['total_profit_loss_pct'],
-        performance_history=performance_history,
-        allocation=allocation
-    )
+    @app.route('/api/stock/<symbol>')
+    def stock_details(symbol):
+        """
+        API endpoint for detailed stock analysis
+        """
+        try:
+            result = analyze_stock(symbol)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
-@app.route('/portfolio/add', methods=['POST'])
-def add_position():
-    """Add a new position to portfolio"""
-    symbol = request.form.get('symbol')
-    shares = float(request.form.get('shares'))
-    buy_price = float(request.form.get('buy_price'))
-    buy_date = request.form.get('buy_date')
-    
-    if portfolio_tracker.add_position(symbol, shares, buy_price, buy_date):
-        flash(f"Added {shares} shares of {symbol} at ${buy_price}", "success")
-    else:
-        flash("Error adding position", "danger")
-        
-    return redirect(url_for('portfolio'))
+    @app.route('/health')
+    def health_check():
+        """
+        Health check endpoint
+        """
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'version': '1.0.0'
+        })
 
-@app.route('/portfolio/remove', methods=['POST'])
-def remove_position():
-    """Remove a position from portfolio"""
-    symbol = request.form.get('symbol')
-    shares = request.form.get('shares')
-    
-    if shares:
-        shares = float(shares)
-    else:
-        shares = None
-        
-    if portfolio_tracker.remove_position(symbol, shares):
-        flash(f"Removed position for {symbol}", "success")
-    else:
-        flash("Error removing position", "danger")
-        
-    return redirect(url_for('portfolio'))
+    return app
 
-@app.route('/performance')
-def performance():
-    """Display prediction performance metrics"""
-    accuracy_metrics = performance_tracker.get_accuracy_metrics()
-    accuracy_by_symbol = performance_tracker.get_accuracy_by_symbol()
-    accuracy_chart = performance_tracker.generate_accuracy_chart()
-    
-    return render_template('performance.html',
-        accuracy_metrics=accuracy_metrics,
-        accuracy_by_symbol=accuracy_by_symbol,
-        accuracy_chart=accuracy_chart
-    )
-
-@app.route('/settings')
-def settings():
-    """Display and update notification settings"""
-    config = notification_system.config
-    
-    return render_template('settings.html',
-        config=config
-    )
-
-@app.route('/settings/update', methods=['POST'])
-def update_settings():
-    """Update notification settings"""
-    # Update email settings
-    notification_system.config['email']['enabled'] = 'email_enabled' in request.form
-    notification_system.config['email']['smtp_server'] = request.form.get('smtp_server')
-    notification_system.config['email']['smtp_port'] = int(request.form.get('smtp_port'))
-    notification_system.config['email']['username'] = request.form.get('email_username')
-    
-    # Only update password if provided
-    if request.form.get('email_password'):
-        notification_system.config['email']['password'] = request.form.get('email_password')
-        
-    # Update recipients
-    recipients = request.form.get('email_recipients', '')
-    notification_system.config['email']['recipients'] = [r.strip() for r in recipients.split(',')] if recipients else []
-    
-    # Update thresholds
-    notification_system.config['thresholds']['price_change'] = float(request.form.get('price_threshold'))
-    notification_system.config['thresholds']['sentiment_change'] = float(request.form.get('sentiment_threshold'))
-    
-    # Update notification types
-    notification_system.config['notification_types']['price_alerts'] = 'price_alerts' in request.form
-    notification_system.config['notification_types']['sentiment_alerts'] = 'sentiment_alerts' in request.form
-    notification_system.config['notification_types']['portfolio_alerts'] = 'portfolio_alerts' in request.form
-    notification_system.config['notification_types']['daily_summary'] = 'daily_summary' in request.form
-    
-    # Save config
-    if notification_system.save_config():
-        flash("Settings updated successfully", "success")
-    else:
-        flash("Error updating settings", "danger")
-        
-    return redirect(url_for('settings'))
+# Create the application instance
+app = create_app()
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=app.config['DEBUG'])
